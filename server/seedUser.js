@@ -13,25 +13,9 @@ const DEFAULT_USER = {
 };
 
 async function run() {
-  try {
-    await mongoose.connect(MONGO_URI);
-    console.log("Connected to MongoDB");
-
-    const existing = await User.findOne({ email: DEFAULT_USER.email });
-    if (existing) {
-      console.log(`User already exists: ${DEFAULT_USER.email}`);
-    } else {
-      await User.create(DEFAULT_USER);
-      console.log("Created default user:");
-      console.log(`  Email: ${DEFAULT_USER.email}`);
-      console.log(`  Password: ${DEFAULT_USER.password}`);
-    }
-  } catch (err) {
-    console.error("Error seeding user:", err.message);
-  } finally {
-    await mongoose.disconnect();
-    process.exit(0);
-  }
+  console.log("🚫 Demo user seeding DISABLED for production safety.");
+  console.log("Create users via /api/auth/register endpoint.");
+  process.exit(0);
 }
 
 run();

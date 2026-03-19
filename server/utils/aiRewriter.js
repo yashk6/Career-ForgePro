@@ -1,98 +1,65 @@
 /**
- * AI Resume Rewriter
- * Uses OpenAI-compatible API to rewrite resume bullet points
- * incorporating missing keywords from the JD analysis.
+ * AI Resume Rewriter - OpenAI Integration
+ * Rewrites resume content to incorporate missing JD keywords naturally.
  */
 
+const OpenAI = require('openai');
 const buildRewritePrompt = (resumeText, missingKeywords, matchedKeywords, jobDescription) => {
-  return `You are an expert ATS Resume Optimizer. Your job is to rewrite the user's resume content to maximize their ATS (Applicant Tracking System) score for the target job description.
+  return `You are an expert ATS Resume Optimizer. Rewrite the resume to maximize ATS score for this job:
 
-## Instructions:
-1. Analyze the resume content and the target job description
-2. Rewrite bullet points to naturally incorporate the MISSING keywords
-3. Keep the candidate's actual experience truthful — only rephrase, don't fabricate
-4. Use strong action verbs and quantifiable achievements where possible
-5. Maintain professional tone and formatting
+MISSING KEYWORDS: ${missingKeywords.join(', ')}
+MATCHED KEYWORDS: ${matchedKeywords.join(', ')}
 
-## Missing Keywords to Incorporate:
-${missingKeywords.join(", ")}
+JOB DESCRIPTION: ${jobDescription}
 
-## Already Matched Keywords (keep these):
-${matchedKeywords.join(", ")}
+ORIGINAL RESUME: ${resumeText}
 
-## Target Job Description:
-${jobDescription}
+Rewrite bullet points naturally incorporating missing keywords. Keep truthful.
 
-## Original Resume Content:
-${resumeText}
-
-## Response Format:
-Return a JSON object with this exact structure:
+Respond ONLY with JSON:
 {
-  "optimizedContent": "The full rewritten resume content with keywords incorporated",
+  "optimizedContent": "Full rewritten content",
   "changes": [
     {
-      "original": "Original bullet point or section",
-      "rewritten": "Rewritten version with keywords",
-      "keywordsAdded": ["keyword1", "keyword2"]
+      "original": "Old text",
+      "rewritten": "New text with keywords",
+      "keywordsAdded": ["kw1", "kw2"]
     }
   ],
-  "newAtsScore": 85,
-  "summary": "Brief summary of changes made"
-}
-
-IMPORTANT: Return ONLY valid JSON, no markdown code blocks.`;
+  "newAtsScore": 90,
+  "summary": "Changes summary"
+}`;
 };
 
-/**
- * Call Google Gemini API for resume rewriting
- * Requires GEMINI_API_KEY in environment (free tier available)
- */
 const rewriteResume = async (resumeText, missingKeywords, matchedKeywords, jobDescription) => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured. Add it to server/.env — get a free key at https://aistudio.google.com/app/apikey");
+    throw new Error("OPENAI_API_KEY missing in server/.env");
   }
+
+  const openai = new OpenAI({ apiKey });
 
   const prompt = buildRewritePrompt(resumeText, missingKeywords, matchedKeywords, jobDescription);
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4000,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
-  }
-
-  const data = await response.json();
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!content) {
-    throw new Error("No response from Gemini model");
-  }
-
-  // Parse the JSON response (handle potential markdown wrapping)
-  let cleaned = content.trim();
-  if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
-  if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
-  if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
 
   try {
-    return JSON.parse(cleaned.trim());
-  } catch (e) {
-    throw new Error("Failed to parse AI response as JSON");
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      max_tokens: 4000,
+    });
+
+    const content = completion.choices[0].message.content.trim();
+
+    // Extract JSON
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Invalid JSON response from OpenAI");
+
+    return JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    throw new Error(`OpenAI error: ${error.message}`);
   }
 };
 
 module.exports = { rewriteResume };
+
